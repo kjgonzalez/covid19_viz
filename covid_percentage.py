@@ -234,18 +234,33 @@ if(__name__=='__main__'):
         palette = cm.get_cmap('plasma',len(plotlist)+2)
         colors = palette.colors[:-2][::-1]
 
-        f,p = plt.subplots()
+        f,p = plt.subplots(figsize=(10,7))
         for j,iloc in enumerate(plotlist):
             p.plot(data[iloc].daysAdj, data[iloc].per100kAdj, label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)
         p.set_ylabel('Cases/100,000 [Count]')
         p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
         f.suptitle('''{} Cases per 100,000 people
         Adjusted for start of outbreak (thresh:{})
-        Select Countries'''.format(
-        # Top {} Cases of EU Member Countries by number'''.format(
+        10 Most Affected EU Member Countries'''.format(
             args.src,args.thresh,args.topAbs
         ))
         p.grid()
         p.legend()
-        plt.show()
+
+        f2, p2 = plt.subplots(figsize=(10,7))
+        for j, iloc in enumerate(plotlist):
+            p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
+                    label='{} ({:.3}m)'.format(iloc, pops[iloc] / 1e6),
+                    linewidth=3)
+        p2.set_ylabel('Total Cases [Count]')
+        p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
+        f2.suptitle('''Total {} Cases
+        Adjusted for start of outbreak (thresh:{})
+        Placeholder'''.format(
+            args.src, args.thresh, args.topAbs
+        ))
+        p2.grid()
+        p2.legend()
+    # show plots
+    plt.show()
     print('done')
