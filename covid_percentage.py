@@ -122,8 +122,11 @@ if(__name__=='__main__'):
     p.add_argument('--smooth',default=False,action='store_true',help='create smooth curves')
     p.add_argument('--allPlots',default=False,action='store_true',help='plot all plots')
     p.add_argument('--topAbs',default=None,type=int,help='top N countries by absolute number')
+    p.add_argument('--botAbs',default=None,type=int,help='bottom N countries by absolute number')
     args=p.parse_args()
 
+    if(args.topAbs is not None and args.botAbs is not None):
+        raise Exception("cannot currently plot both top and bottom countries")
 
     # load data
     pdcon = pd.read_csv(base.format(args.src))
@@ -187,6 +190,8 @@ if(__name__=='__main__'):
     # plot only main one
     if(args.topAbs!=None):
         plotlist=plotlist[:args.topAbs]
+    elif(args.botAbs!=None):
+        plotlist = plotlist[::-1][:args.botAbs] # already ordered in descending order, can reverse
 
 
 
@@ -231,8 +236,8 @@ if(__name__=='__main__'):
         p[3].grid()
         plt.show()
     else:
-        palette = cm.get_cmap('plasma',len(plotlist)+2)
-        colors = palette.colors[:-2][::-1]
+        # palette = cm.get_cmap('plasma',len(plotlist)+2)
+        # colors = palette.colors[:-2][::-1]
 
         f,p = plt.subplots(figsize=(10,7))
         for j,iloc in enumerate(plotlist):
@@ -240,10 +245,7 @@ if(__name__=='__main__'):
         p.set_ylabel('Cases/100,000 [Count]')
         p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
         f.suptitle('''{} Cases per 100,000 people
-        Adjusted for start of outbreak (thresh:{})
-        10 Most Affected EU Member Countries'''.format(
-            args.src,args.thresh,args.topAbs
-        ))
+        Adjusted for start of outbreak (thresh:{})'''.format(args.src,args.thresh))
         p.grid()
         p.legend()
 
@@ -255,10 +257,7 @@ if(__name__=='__main__'):
         p2.set_ylabel('Total Cases [Count]')
         p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
         f2.suptitle('''Total {} Cases
-        Adjusted for start of outbreak (thresh:{})
-        Placeholder'''.format(
-            args.src, args.thresh, args.topAbs
-        ))
+        Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
         p2.grid()
         p2.legend()
     # show plots
