@@ -120,7 +120,7 @@ if(__name__=='__main__'):
     p.add_argument('--locs',help='desired countries. example: China-US-Sri_Lanka',
         default='China-US-Italy-Germany')
     p.add_argument('--smooth',default=False,action='store_true',help='create smooth curves')
-    p.add_argument('--allPlots',default=False,action='store_true',help='plot all plots')
+    # p.add_argument('--allPlots',default=False,action='store_true',help='plot all plots')
     p.add_argument('--topAbs',default=None,type=int,help='top N countries by absolute number')
     p.add_argument('--botAbs',default=None,type=int,help='bottom N countries by absolute number')
     args=p.parse_args()
@@ -195,71 +195,50 @@ if(__name__=='__main__'):
 
 
 
-    if(args.allPlots):
-        # plot everything
-        f,p = plt.subplots(2,2)
-        p=np.reshape(p,4)
-        f.suptitle(args.src + ' infection cases')
-        for j,i in enumerate(plotlist):
-            p[0].plot(data[i].days,data[i].vals+1,formats[j],label='{} ({:e})'.format(i,pops[i]))
-            # note: adding +1 for compatabilitty with log plotting
-        p[0].set_ylabel('Number of Cases [n]')
-        p[0].set_xlabel('Days since world outbreak ('+date0+') [Days]')
-        p[0].grid()
-        # p[0].set_yscale('log')
+    # if(args.allPlots):
+    #     # plot everything
+    #     f,p = plt.subplots(2,2)
+    #     p=np.reshape(p,4)
+    #     f.suptitle(args.src + ' infection cases')
+    #     for j,i in enumerate(plotlist):
+    #         p[0].plot(data[i].days,data[i].vals+1,formats[j],label='{} ({:e})'.format(i,pops[i]))
+    #         # note: adding +1 for compatabilitty with log plotting
+    #     p[0].set_ylabel('Number of Cases [n]')
+    #     p[0].set_xlabel('Days since world outbreak ('+date0+') [Days]')
+    #     p[0].grid()
+    #     # p[0].set_yscale('log')
+    #
+    #     # p[1].legend(loc=2,fontsize='x-small',ncol=2)
+    #     indPlot=0
+    #     if(len(plotlist)<20):
+    #         p[indPlot].legend(loc=2)
+    #     elif(len(plotlist)>20 and len(plotlist) <50):
+    #         p[0].legend(loc=2,fontsize='x-small',ncol=2)
+    #     else:
+    #         p[0].legend(loc=2,fontsize=4,ncol=3)
+    #     for j,i in enumerate(plotlist):
+    #         p[1].plot(data[i].days,data[i].percentpop,formats[j],label='{} ({:e})'.format(i,pops[i]))
+    #     p[1].set_ylabel('Population Percentage [%]')
+    #     p[1].set_xlabel('Days since world outbreak ('+date0+') [Days]')
+    #     p[1].grid()
+    #
+    #
+    #     for j,i in enumerate(plotlist):
+    #         p[2].plot(data[i].daysAdj,data[i].valsAdj,formats[j],label='{} ({:e})'.format(i,pops[i]))
+    #     p[2].set_ylabel('Number of Cases [n]')
+    #     p[2].set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
+    #     p[2].grid()
+    #
+    #     for j,i in enumerate(plotlist):
+    #         p[3].plot(data[i].daysAdj,data[i].percentpopAdj,formats[j],label='{} ({:e})'.format(i,pops[i]))
+    #     p[3].set_ylabel('Population Percentage [%]')
+    #     p[3].set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
+    #     p[3].grid()
+    #     plt.show()
+    # else:
+    # palette = cm.get_cmap('plasma',len(plotlist)+2)
+    # colors = palette.colors[:-2][::-1]
 
-        # p[1].legend(loc=2,fontsize='x-small',ncol=2)
-        indPlot=0
-        if(len(plotlist)<20):
-            p[indPlot].legend(loc=2)
-        elif(len(plotlist)>20 and len(plotlist) <50):
-            p[0].legend(loc=2,fontsize='x-small',ncol=2)
-        else:
-            p[0].legend(loc=2,fontsize=4,ncol=3)
-        for j,i in enumerate(plotlist):
-            p[1].plot(data[i].days,data[i].percentpop,formats[j],label='{} ({:e})'.format(i,pops[i]))
-        p[1].set_ylabel('Population Percentage [%]')
-        p[1].set_xlabel('Days since world outbreak ('+date0+') [Days]')
-        p[1].grid()
-
-
-        for j,i in enumerate(plotlist):
-            p[2].plot(data[i].daysAdj,data[i].valsAdj,formats[j],label='{} ({:e})'.format(i,pops[i]))
-        p[2].set_ylabel('Number of Cases [n]')
-        p[2].set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-        p[2].grid()
-
-        for j,i in enumerate(plotlist):
-            p[3].plot(data[i].daysAdj,data[i].percentpopAdj,formats[j],label='{} ({:e})'.format(i,pops[i]))
-        p[3].set_ylabel('Population Percentage [%]')
-        p[3].set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-        p[3].grid()
-        plt.show()
-    else:
-        # palette = cm.get_cmap('plasma',len(plotlist)+2)
-        # colors = palette.colors[:-2][::-1]
-
-        f,p = plt.subplots(figsize=(10,7))
-        for j,iloc in enumerate(plotlist):
-            p.plot(data[iloc].daysAdj, data[iloc].per100kAdj, label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)
-        p.set_ylabel('Cases/100,000 [Count]')
-        p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-        f.suptitle('''{} Cases per 100,000 people
-        Adjusted for start of outbreak (thresh:{})'''.format(args.src,args.thresh))
-        p.grid()
-        p.legend()
-
-        f2, p2 = plt.subplots(figsize=(10,7))
-        for j, iloc in enumerate(plotlist):
-            p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
-                    label='{} ({:.3}m)'.format(iloc, pops[iloc] / 1e6),
-                    linewidth=3)
-        p2.set_ylabel('Total Cases [Count]')
-        p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-        f2.suptitle('''Total {} Cases
-        Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
-        p2.grid()
-        p2.legend()
     # show plots
     plt.show()
     print('done')
