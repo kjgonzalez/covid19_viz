@@ -239,6 +239,80 @@ if(__name__=='__main__'):
     # palette = cm.get_cmap('plasma',len(plotlist)+2)
     # colors = palette.colors[:-2][::-1]
 
+    f,p = plt.subplots(figsize=(10,7))
+    lines=[]
+    for j,iloc in enumerate(plotlist):
+        lines.append( p.plot(data[iloc].daysAdj, data[iloc].per100kAdj, label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)[0] )
+    p.set_ylabel('Cases/100,000 [Count]')
+    p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
+    f.suptitle('''{} Cases per 100,000 people
+    Adjusted for start of outbreak (thresh:{})'''.format(args.src,args.thresh))
+    p.grid()
+    p.legend()
+    annot1=p.annotate("", xy=(0,0), xytext=( 40,0 ), textcoords="offset points",
+                    bbox=dict(boxstyle="round", fc="w"),
+                    arrowprops=dict(arrowstyle="->"))
+    annot1.set_visible(False)
+
+    def update_annot(name, xmouse, ymouse):
+        annot1.xy = (xmouse, ymouse)
+        annot1.set_text(name)
+        annot1.get_bbox_patch().set_alpha(0.4)
+
+    def hover(event):
+        vis = annot1.get_visible()
+        if event.inaxes == p:
+            _ind = -1
+            for i in range(len(lines)):
+                if (lines[i].contains(event)[0]):
+                    _ind = i
+            if (_ind > -1):
+                update_annot(lines[_ind]._label, event.xdata, event.ydata)
+                annot1.set_visible(True)
+                f.canvas.draw_idle()
+            elif (vis):
+                annot1.set_visible(False)
+                f.canvas.draw_idle()
+    f.canvas.mpl_connect("motion_notify_event", hover)
+
+    lines2=[]
+    f2, p2 = plt.subplots(figsize=(10,7))
+    for j, iloc in enumerate(plotlist):
+        lines2.append( p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
+                label='{} ({:.3}m)'.format(iloc, pops[iloc] / 1e6),
+                linewidth=3)[0] )
+    p2.set_ylabel('Total Cases [Count]')
+    p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
+    f2.suptitle('''Total {} Cases
+    Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
+    p2.grid()
+    p2.legend()
+    annot2=p2.annotate("", xy=(0,0), xytext=( 40,0 ), textcoords="offset points",
+                    bbox=dict(boxstyle="round", fc="w"),
+                    arrowprops=dict(arrowstyle="->"))
+    annot2.set_visible(False)
+
+    def update_annot2(name, xmouse, ymouse):
+        annot2.xy = (xmouse, ymouse)
+        annot2.set_text(name)
+        annot2.get_bbox_patch().set_alpha(0.4)
+
+    def hover2(event):
+        vis = annot2.get_visible()
+        if event.inaxes == p2:
+            _ind = -1
+            for i in range(len(lines2)):
+                if (lines2[i].contains(event)[0]):
+                    _ind = i
+            if (_ind > -1):
+                update_annot2(lines2[_ind]._label, event.xdata, event.ydata)
+                annot2.set_visible(True)
+                f2.canvas.draw_idle()
+            elif (vis):
+                annot2.set_visible(False)
+                f2.canvas.draw_idle()
+    f2.canvas.mpl_connect("motion_notify_event", hover2)
+
     # show plots
     plt.show()
     print('done')
