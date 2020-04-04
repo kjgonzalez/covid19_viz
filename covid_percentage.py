@@ -37,8 +37,25 @@ def dayssince(_dates,_fmt='%m/%d/%Y'):
     return np.round(seconds/(60*60*24))
 
 
-def parse_countries_string(countries_string):
-    return countries_string.replace('_',' ').split('-')
+def parse_countries_string(countries_string,all_locations):
+    ''' separate string into list of country names '''
+    csplit = lambda s:s.replace('_',' ').split('-')
+    cs = csplit(countries_string)
+    if('all' in cs):
+        # quick solution, exception to regular parsing
+        return all_locations
+
+    if('eu' in cs):
+        cs.remove('eu')
+        cs+=csplit(C_EU)
+        cs=list(set(cs))
+    if('samerica' in cs):
+        cs.remove('samerica')
+        cs+=csplit(C_SA)
+    if('namerica' in cs):
+        cs.remove('namerica')
+        cs+=csplit(C_NA)
+    return cs
 
 # some constants
 base = 'COVID-19\\csse_covid_19_data\\csse_covid_19_time_series\\time_series_covid19_{}_global.csv'
@@ -64,7 +81,7 @@ C_ME = 'Egypt-Iran-Turkey-Iraq-Saudi_Arabia-Syria-Yemen-United_Arab_Emirates-Isr
 
 # check that there's no overlap between regions
 _all = '-'.join([C_EU,C_SA,C_NA,C_AA,C_ME])
-_all = parse_countries_string(_all)
+_all = parse_countries_string(_all,_all)
 _res = listContents(_all,True)
 _whereGreater = np.where(_res[:,1]>1)
 assert _res[:,1].max()==1,"repeated locations:\n{}".format(_res[_whereGreater])
@@ -153,31 +170,12 @@ if(__name__=='__main__'):
     pops = np.array(pd.read_csv(f_pop,header=None))
     pops = { i[0]:int(i[1]) for i in pops } # overwrite as dictionary
 
-    ''' parsing locations
-    1. load locs and minus
-    2. if locs is special name, change to that
-    3. 
-
-    raw string format >> parsed list
-    '''
-
-
-
-
-    LOCS = args.locs
-
-    # debugging
-    LOCS = 'US-Italy-China-Germany'
-    args.minus = 'Italy-China'
-    # preprocess LOCS, including regional blocks
-    if(LOCS=='eu'):
-        LOCS= parse_countries_string(eu)
-    elif(LOCS=='all'): LOCS=names
-    elif(LOCS=='samerica'): LOCS=samerica
-    else: LOCS = LOCS.replace('_',' ').split('-')
-    args.minus = args.minus.replace('_',' ').split('-')
-    LOCS = list( set(LOCS) - set(args.minus) )
-    print(LOCS)
+    # load locs and minus, remove minus, remove locations not affected
+    LOCS = parse_countries_string(args.locs,locs_affected)
+    _MINUS = parse_countries_string(args.minus,locs_affected)
+    LOCS = list((set(LOCS) - set(_MINUS)).intersection(set(locs_affected)))
+    LOCS.sort() # help keep colors consistent across runs
+    # can only filter by top / bottom N locations AFTER data loading is complete
 
     # check that all values in LOCS are in population data
     for iloc in LOCS:
@@ -193,9 +191,9 @@ if(__name__=='__main__'):
     pops = { i[0]:int(i[1]) for i in pdpops }
 
     # put yvalues into single array
-    numbers=np.zeros((len(names),len(dcon[0,4:]))).astype(int)
+    numbers=np.zeros((len(locs_affected),len(dcon[0,4:]))).astype(int)
     for irow in dcon:
-        ind = np.where(irow[1]==names)
+        ind = np.where(irow[1]==locs_affected)
         numbers[ind]+=irow[4:].astype(int)
     numbers=numbers.astype(int)
 
@@ -203,7 +201,7 @@ if(__name__=='__main__'):
     data = dict()
     plotlist=np.array(LOCS)
     for i,iname in enumerate(plotlist):
-        ind = np.where(iname==names)[0][0]
+        ind = np.where(iname==locs_affected)[0][0]
         data[iname]=Country(iname,days,numbers[ind],pops[iname],
                             thresh=args.thresh,smooth=args.smooth,formatPlot=formats[i])
 
@@ -213,7 +211,8 @@ if(__name__=='__main__'):
     plotlist=plotlist[mask[::-1]]
     vals=vals[mask[::-1]]
     # filter out for top / bottom N countries
-    if(args.topAbs!=None): plotlist=plotlist[:args.topAbs]
+    if(args.topAbs!=None):
+        plotlist=plotlist[:args.topAbs]
     elif(args.botAbs!=None): plotlist = plotlist[::-1][:args.botAbs]
 
 
@@ -223,7 +222,7 @@ if(__name__=='__main__'):
 
     # plot everything
     print('number of affected countries / sovereignties:',len(locs_affected))
-    print('plotting {} countries...'.format(len(LOCS)))
+    print('plotting {} countries...'.format(len(plotlist)))
 
 
 
