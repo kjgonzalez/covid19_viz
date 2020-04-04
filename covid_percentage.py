@@ -45,17 +45,29 @@ base = 'COVID-19\\csse_covid_19_data\\csse_covid_19_time_series\\time_series_cov
 f_con = base.format('confirmed')
 f_dea = base.format('deaths')
 f_rec = base.format('recovered')
-f_pop = 'pops.csv'
-eu = 'Austria-Belgium-Bulgaria-Croatia-Cyprus-Czechia-' + \
+f_pop = 'populations.csv'
+
+C_EU = 'Austria-Belgium-Bulgaria-Croatia-Cyprus-Czechia-' + \
      'Denmark-Estonia-Finland-France-Germany-Greece-Hungary-Ireland-Italy-' + \
      'Latvia-Lithuania-Luxembourg-Malta-Netherlands-Poland-Portugal-Romania-' + \
      'Slovakia-Slovenia-Spain-Sweden'
-samerica = 'Argentina-Bolivia-Brazil-Chile-Colombia-Ecuador-French_Guiana-'+\
+C_SA = 'Argentina-Bolivia-Brazil-Chile-Colombia-Ecuador-French_Guiana-'+\
            'Guyana-Paraguay-Peru-Suriname-Uruguay-Venezuela'
-namerica = 'US-Mexico-Canada-Guatemala-Cuba-Haiti-Dominican_Republic-Honduras-Nicaragua-'+\
+C_NA = 'US-Mexico-Canada-Guatemala-Cuba-Haiti-Dominican_Republic-Honduras-Nicaragua-'+\
            'El_Salvador-Costa_Rica-Panama-Puerto_Rico-Jamaica-Trinidad_and_Tobago-Bahamas-'+\
-           'Bahamas-Guadeloupe-Martinique-Belize-Barbados-Saint_Lucia-Antigua_and_Barbuda-Grenada'
+           'Guadeloupe-Martinique-Belize-Barbados-Saint_Lucia-Antigua_and_Barbuda-Grenada'
+C_AA = 'China-India-Indonesia-Pakistan-Bangladesh-Russia-Japan-Phillippines-Vietnam-'+\
+       'Thailand-Myanmar-Korea,_South-Afghanistan-Uzbekistan-Malaysia-'+\
+       'Nepal-Korea,_North-Taiwan*-Sir_Lanka-Kazakhstan-Cambodia-Azerbaijan'
+C_ME = 'Egypt-Iran-Turkey-Iraq-Saudi_Arabia-Syria-Yemen-United_Arab_Emirates-Israel-Jordan-'+\
+       'Palestine-Lebanon-Kuwait-Oman-Qatar-Bahrain'
 
+# check that there's no overlap between regions
+_all = '-'.join([C_EU,C_SA,C_NA,C_AA,C_ME])
+_all = parse_countries_string(_all)
+_res = listContents(_all,True)
+_whereGreater = np.where(_res[:,1]>1)
+assert _res[:,1].max()==1,"repeated locations:\n{}".format(_res[_whereGreater])
 
 # generate all possible combinations, with priority to color & marker
 formats = []
@@ -132,12 +144,12 @@ if(__name__=='__main__'):
     dates=np.array(pdcon.columns[4:])
     fmt='%m/%d/%Y'
     fmt2='%Y%b%d'
-    date0=time.strftime(fmt2,time.strptime(dates[0]+'20',fmt))
+    date0=time.strftime(fmt2,time.strptime(dates[0]+'20',fmt)) # start of worldwide outbreak
     dcon=np.array(pdcon)
     days = dayssince(dates)
     days = days-days[0] # days since start of worldwide outbreak
-    names = listContents(dcon[:,1],True)[:,0] # names of countries
-    names = names[np.argsort(names)] # sort names alphabetically
+    locs_affected = listContents(dcon[:,1],True)[:,0] # locs_affected of affected countries
+    locs_affected = locs_affected[np.argsort(locs_affected)] # sort locs_affected alphabetically
     pops = np.array(pd.read_csv(f_pop,header=None))
     pops = { i[0]:int(i[1]) for i in pops } # overwrite as dictionary
 
@@ -147,7 +159,6 @@ if(__name__=='__main__'):
     3. 
 
     raw string format >> parsed list
-    
     '''
 
 
@@ -167,9 +178,8 @@ if(__name__=='__main__'):
     args.minus = args.minus.replace('_',' ').split('-')
     LOCS = list( set(LOCS) - set(args.minus) )
     print(LOCS)
-    print('number of affected countries / sovereignties:',len(names))
-    print('plotting {} countries...'.format(len(LOCS)))
-    # check that all values in LOCS are in pops
+
+    # check that all values in LOCS are in population data
     for iloc in LOCS:
         if(iloc not in pops.keys()):
             ipop=input('Country not in pops.csv. Please give population for '+
@@ -212,6 +222,8 @@ if(__name__=='__main__'):
 
 
     # plot everything
+    print('number of affected countries / sovereignties:',len(locs_affected))
+    print('plotting {} countries...'.format(len(LOCS)))
 
 
 
