@@ -13,25 +13,65 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import os, time, argparse
-import klib
 from scipy.interpolate import make_interp_spline, BSpline
 
-# first, generate all possible combinations, with priority to color & marker
+def listContents(arr,ReturnAsNPArr=False):
+    ''' Take in a string list and return a dict or numpy array of
+    the unique values and the number of times they appear.
+    '''
+    z=dict()
+    for _irow in arr:
+        if(_irow in z.keys()):
+            z[_irow]+=1 # already seen, increment counter
+        else:
+            z[_irow]=1 # irow never seen, create key and set to 1
+    if(ReturnAsNPArr==False):
+        return z
+    else:
+        _items=np.array([list(z.keys())],dtype='object').transpose()
+        nums=np.array([list(z.values())],dtype='object').transpose()
+    return np.column_stack((_items,nums))
+
+def dayssince(_dates,_fmt='%m/%d/%Y'):
+    seconds = np.array([time.mktime(time.strptime(i+'20',_fmt)) for i in _dates])
+    return np.round(seconds/(60*60*24))
+
+
+def parse_countries_string(countries_string):
+    return countries_string.replace('_',' ').split('-')
+
+# some constants
+base = 'COVID-19\\csse_covid_19_data\\csse_covid_19_time_series\\time_series_covid19_{}_global.csv'
+f_con = base.format('confirmed')
+f_dea = base.format('deaths')
+f_rec = base.format('recovered')
+f_pop = 'pops.csv'
+eu = 'Austria-Belgium-Bulgaria-Croatia-Cyprus-Czechia-' + \
+     'Denmark-Estonia-Finland-France-Germany-Greece-Hungary-Ireland-Italy-' + \
+     'Latvia-Lithuania-Luxembourg-Malta-Netherlands-Poland-Portugal-Romania-' + \
+     'Slovakia-Slovenia-Spain-Sweden'
+samerica = 'Argentina-Bolivia-Brazil-Chile-Colombia-Ecuador-French_Guiana-'+\
+           'Guyana-Paraguay-Peru-Suriname-Uruguay-Venezuela'
+namerica = 'US-Mexico-Canada-Guatemala-Cuba-Haiti-Dominican_Republic-Honduras-Nicaragua-'+\
+           'El_Salvador-Costa_Rica-Panama-Puerto_Rico-Jamaica-Trinidad_and_Tobago-Bahamas-'+\
+           'Bahamas-Guadeloupe-Martinique-Belize-Barbados-Saint_Lucia-Antigua_and_Barbuda-Grenada'
+
+
+# generate all possible combinations, with priority to color & marker
 formats = []
 for ils in '- -- -. :'.split(' '):
     for imk in ' , o * v x ^ s +'.split(' '):
         for iclr in 'bgrcmyk':
             formats.append( iclr+ils+imk )
 
-
 class Country:
-    def __init__(self,name,days,values,pop,thresh=0,smooth=False):
+    def __init__(self,name,days,values,pop,thresh=0,smooth=False,formatPlot=''):
         self.name=name
         self.days=days
         self.vals=values
         self.pop=pop
         self._thresh=thresh
-
+        self.fmtplot=formatPlot
         try:
             self.ind_first=np.where(values>thresh)[0][0]
         except IndexError:
@@ -69,43 +109,25 @@ class Country:
     def per100kAdj(self):
         return self.percentpopAdj/100*100e3
 
-def dayssince(dates,fmt='%m/%d/%Y'):
-    seconds = np.array([time.mktime(time.strptime(i+'20',fmt)) for i in dates])
-    days = np.round(seconds/(60*60*24))
-    return days
-
-base='COVID-19\\csse_covid_19_data\\csse_covid_19_time_series\\time_series_covid19_{}_global.csv'
-f_con=base.format('confirmed')
-f_dea=base.format('deaths')
-f_rec=base.format('recovered')
-f_pop='pops.csv'
-eu = 'Austria Belgium Bulgaria Croatia Cyprus Czechia ' + \
-    'Denmark Estonia Finland France Germany Greece Hungary Ireland Italy '+\
-    'Latvia Lithuania Luxembourg Malta Netherlands Poland Portugal Romania '+\
-    'Slovakia Slovenia Spain Sweden'
-eu=eu.split(' ')
-samerica='Argentina-Bolivia-Brazil-Chile-Colombia-Ecuador-French Guiana-Guyana-Paraguay-Peru-Suriname-Uruguay-Venezuela'.split('-')
-# samerica=samerica.split('-')
-
+    @property
+    def newvals(self):
+        return self.days,self.vals
 
 if(__name__=='__main__'):
     p=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument('--src',default='confirmed',help='Confirmed, Deaths, Recovered')
     p.add_argument('--thresh',default=50,type=int,help='min number of cases for aligning chronologically')
-    p.add_argument('--locs',help='desired countries. example: China-US-Sri_Lanka',
-        default='China-US-Italy-Germany')
+    p.add_argument('--locs',default='China-US-Italy-Germany',
+                   help='desired countries. Examples: United_Kingdom-China')
     p.add_argument('--smooth',default=False,action='store_true',help='create smooth curves')
-    # p.add_argument('--allPlots',default=False,action='store_true',help='plot all plots')
     p.add_argument('--topAbs',default=None,type=int,help='top N countries by absolute number')
     p.add_argument('--botAbs',default=None,type=int,help='bottom N countries by absolute number')
-    p.add_argument('--minus', help='excluded countries. example: Fiji-Diamond_Princess',
-                   default='China-US-Italy-Germany')
+    p.add_argument('--minus',default='Fiji-Diamond_Princess',help='excluded countries.')
     args=p.parse_args()
-
     if(args.topAbs is not None and args.botAbs is not None):
         raise Exception("cannot currently plot both top and bottom countries")
 
-    # load data
+    # load raw data
     pdcon = pd.read_csv(base.format(args.src))
     dates=np.array(pdcon.columns[4:])
     fmt='%m/%d/%Y'
@@ -113,32 +135,45 @@ if(__name__=='__main__'):
     date0=time.strftime(fmt2,time.strptime(dates[0]+'20',fmt))
     dcon=np.array(pdcon)
     days = dayssince(dates)
-    days = days-days[0]
-    names = klib.listContents(dcon[:,1],True)[:,0] # names of countries
+    days = days-days[0] # days since start of worldwide outbreak
+    names = listContents(dcon[:,1],True)[:,0] # names of countries
     names = names[np.argsort(names)] # sort names alphabetically
-    pdpops = np.array(pd.read_csv(f_pop,header=None))
-    pops = { i[0]:int(i[1]) for i in pdpops }
+    pops = np.array(pd.read_csv(f_pop,header=None))
+    pops = { i[0]:int(i[1]) for i in pops } # overwrite as dictionary
 
-    # preprocess locations, including regional blocks
-    if(args.locs=='eu'):
-        args.locs=eu
-    elif(args.locs=='all'):
-        args.locs=names
-    elif(args.locs=='samerica'):
-        args.locs=samerica
-    else:
-        args.locs = args.locs.replace('_',' ').split('-')
+    ''' parsing locations
+    1. load locs and minus
+    2. if locs is special name, change to that
+    3. 
 
+    raw string format >> parsed list
+    
+    '''
+
+
+
+
+    LOCS = args.locs
+
+    # debugging
+    LOCS = 'US-Italy-China-Germany'
+    args.minus = 'Italy-China'
+    # preprocess LOCS, including regional blocks
+    if(LOCS=='eu'):
+        LOCS= parse_countries_string(eu)
+    elif(LOCS=='all'): LOCS=names
+    elif(LOCS=='samerica'): LOCS=samerica
+    else: LOCS = LOCS.replace('_',' ').split('-')
     args.minus = args.minus.replace('_',' ').split('-')
-
-    print('number of available plot formats:',len(formats))
+    LOCS = list( set(LOCS) - set(args.minus) )
+    print(LOCS)
     print('number of affected countries / sovereignties:',len(names))
-    print('plotting {} countries...'.format(len(args.locs)))
-    # check that all values in args.locs are in pops
-    for iloc in args.locs:
+    print('plotting {} countries...'.format(len(LOCS)))
+    # check that all values in LOCS are in pops
+    for iloc in LOCS:
         if(iloc not in pops.keys()):
             ipop=input('Country not in pops.csv. Please give population for '+
-                iloc+' (will be saved): ')
+                       iloc+' (will be saved): ')
             f=open(f_pop,'a')
             f.write('"{}",{}\n'.format(iloc,ipop))
             f.close()
@@ -156,30 +191,34 @@ if(__name__=='__main__'):
 
     # put all data into dict of objects
     data = dict()
-    plotlist=np.array(args.locs)
-    for iname in plotlist:
+    plotlist=np.array(LOCS)
+    for i,iname in enumerate(plotlist):
         ind = np.where(iname==names)[0][0]
         data[iname]=Country(iname,days,numbers[ind],pops[iname],
-                        thresh=args.thresh,smooth=args.smooth)
+                            thresh=args.thresh,smooth=args.smooth,formatPlot=formats[i])
+
     # order the list in ascending abs
     vals = np.array([data[iname].vals.max() for iname in plotlist])
     mask=np.argsort(vals)
     plotlist=plotlist[mask[::-1]]
     vals=vals[mask[::-1]]
-    for i in range(len(vals)):
-        print(plotlist[i],vals[i])
-    # plot only main one
-    if(args.topAbs!=None):
-        plotlist=plotlist[:args.topAbs]
-    elif(args.botAbs!=None):
-        plotlist = plotlist[::-1][:args.botAbs] # already ordered in descending order, can reverse
+    # filter out for top / bottom N countries
+    if(args.topAbs!=None): plotlist=plotlist[:args.topAbs]
+    elif(args.botAbs!=None): plotlist = plotlist[::-1][:args.botAbs]
+
+
+
+
+
+
+    # plot everything
+
 
 
     f,p = plt.subplots(figsize=(10,7))
     lines=[]
     for j,iloc in enumerate(plotlist):
-        lines.append( p.plot(data[iloc].daysAdj, data[iloc].per100kAdj,
-                             formats[j],
+        lines.append( p.plot(data[iloc].daysAdj, data[iloc].per100kAdj, data[iloc].fmtplot,
                              label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)[0] )
     p.set_ylabel('Cases/100,000 [Count]')
     p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
@@ -188,8 +227,8 @@ if(__name__=='__main__'):
     p.grid()
     p.legend()
     annot1=p.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
-                    bbox=dict(boxstyle="round", fc="w"),
-                    arrowprops=dict(arrowstyle="->"))
+                      bbox=dict(boxstyle="round", fc="w"),
+                      arrowprops=dict(arrowstyle="->"))
     annot1.set_visible(False)
 
     def update_annot(name, xmouse, ymouse):
@@ -213,55 +252,55 @@ if(__name__=='__main__'):
                 f.canvas.draw_idle()
     f.canvas.mpl_connect("motion_notify_event", hover)
 
-    lines2=[]
-    f2, p2 = plt.subplots(figsize=(10,7))
-    for j, iloc in enumerate(plotlist):
-        lines2.append( p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
-                formats[j],
-                label='{} ({})'.format(iloc, data[iloc].valsAdj.max()/1e3),
-                linewidth=3)[0]
-
-               )
-    p2.set_ylabel('Total Cases [Count]')
-    p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-    f2.suptitle('''Total {} Cases
-    Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
-    p2.grid()
-    p2.set_yscale('log')
-    p2.legend()
-    annot2=p2.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
-                    bbox=dict(boxstyle="round", fc="w"),
-                    arrowprops=dict(arrowstyle="->"))
-    annot2.set_visible(False)
-
-    def update_annot2(name, xmouse, ymouse):
-        annot2.xy = (xmouse, ymouse)
-        annot2.set_text(name)
-        annot2.get_bbox_patch().set_alpha(0.4)
-
-    def hover2(event):
-        vis = annot2.get_visible()
-        if event.inaxes == p2:
-            _ind = -1
-            for i in range(len(lines2)):
-                if (lines2[i].contains(event)[0]):
-                    _ind = i
-            if (_ind > -1):
-                update_annot2(lines2[_ind]._label, event.xdata, event.ydata)
-                annot2.set_visible(True)
-                f2.canvas.draw_idle()
-            elif (vis):
-                annot2.set_visible(False)
-                f2.canvas.draw_idle()
-    f2.canvas.mpl_connect("motion_notify_event", hover2)
-
-    # for now, only plot the first (highest) entry
-    f3,p3=plt.subplots()
-    for iname in plotlist:
-        ydiff = data[iname].valsAdj[1:]-data[iname].valsAdj[:-1]
-        p3.bar(data[iname].daysAdj[:-1],ydiff,label=iname)
-    p3.legend()
-    p3.grid()
-    # show plots
+    # lines2=[]
+    # f2, p2 = plt.subplots(figsize=(10,7))
+    # for j, iloc in enumerate(plotlist):
+    #     lines2.append( p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
+    #             formats[j],
+    #             label='{} ({})'.format(iloc, data[iloc].valsAdj.max()/1e3),
+    #             linewidth=3)[0]
+    #
+    #            )
+    # p2.set_ylabel('Total Cases [Count]')
+    # p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
+    # f2.suptitle('''Total {} Cases
+    # Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
+    # p2.grid()
+    # p2.set_yscale('log')
+    # p2.legend()
+    # annot2=p2.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
+    #                 bbox=dict(boxstyle="round", fc="w"),
+    #                 arrowprops=dict(arrowstyle="->"))
+    # annot2.set_visible(False)
+    #
+    # def update_annot2(name, xmouse, ymouse):
+    #     annot2.xy = (xmouse, ymouse)
+    #     annot2.set_text(name)
+    #     annot2.get_bbox_patch().set_alpha(0.4)
+    #
+    # def hover2(event):
+    #     vis = annot2.get_visible()
+    #     if event.inaxes == p2:
+    #         _ind = -1
+    #         for i in range(len(lines2)):
+    #             if (lines2[i].contains(event)[0]):
+    #                 _ind = i
+    #         if (_ind > -1):
+    #             update_annot2(lines2[_ind]._label, event.xdata, event.ydata)
+    #             annot2.set_visible(True)
+    #             f2.canvas.draw_idle()
+    #         elif (vis):
+    #             annot2.set_visible(False)
+    #             f2.canvas.draw_idle()
+    # f2.canvas.mpl_connect("motion_notify_event", hover2)
+    #
+    # # for now, only plot the first (highest) entry
+    # f3,p3=plt.subplots()
+    # for iname in plotlist:
+    #     ydiff = data[iname].valsAdj[1:]-data[iname].valsAdj[:-1]
+    #     p3.bar(data[iname].daysAdj[:-1],ydiff,label=iname)
+    # p3.legend()
+    # p3.grid()
+    # # show plots
     plt.show()
     print('done')
