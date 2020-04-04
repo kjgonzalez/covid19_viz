@@ -1,29 +1,11 @@
 '''
-main goal: create a graph per-country of population-percentage vs days since
-    first infection
-NOTE: will start with just number of infections
-want:
-countr[0]=[
-[days,infections],
-]
-
-note: over 154 unique countries
+author: kjgonzalez
+objective: create a graph per-country of population-percentage vs days since first infection
 
 quick note about plotting:
 7 diff colors: b / g / r / c / m / y / k
 4 diff linestyles: - / -- / -. / :
 9 diff markers: <none> / , / o / v / ^ / s / * / + / x
-
-sources:https://digitalsynopsis.com/design/color-schemes-palettes/
-
-STAT | DESCRIPTION
-???? | plot with specific color scheme
-???? | be able to plot top 5 of a certain category
-???? | create interpolating color scheme
-???? |
-???? |
-???? |
-
 
 '''
 
@@ -33,15 +15,6 @@ import matplotlib.pyplot as plt
 import os, time, argparse
 import klib
 from scipy.interpolate import make_interp_spline, BSpline
-from matplotlib import cm
-
-p1=np.array([
-[0.984,0.643,0.396,1],
-[0.973,0.431,0.318,1],
-[0.933,0.243,0.220,1],
-[0.820,0.098,0.243,1],
-])
-
 
 # first, generate all possible combinations, with priority to color & marker
 formats = []
@@ -101,21 +74,23 @@ def dayssince(dates,fmt='%m/%d/%Y'):
     days = np.round(seconds/(60*60*24))
     return days
 
-base='COVID-19\\csse_covid_19_data\\csse_covid_19_time_series\\time_series_19-covid-{}.csv'
-f_con=base.format('Confirmed')
-f_dea=base.format('Deaths')
-f_rec=base.format('Recovered')
+base='COVID-19\\csse_covid_19_data\\csse_covid_19_time_series\\time_series_covid19_{}_global.csv'
+f_con=base.format('confirmed')
+f_dea=base.format('deaths')
+f_rec=base.format('recovered')
 f_pop='pops.csv'
 eu = 'Austria Belgium Bulgaria Croatia Cyprus Czechia ' + \
     'Denmark Estonia Finland France Germany Greece Hungary Ireland Italy '+\
     'Latvia Lithuania Luxembourg Malta Netherlands Poland Portugal Romania '+\
     'Slovakia Slovenia Spain Sweden'
 eu=eu.split(' ')
+samerica='Argentina-Bolivia-Brazil-Chile-Colombia-Ecuador-French Guiana-Guyana-Paraguay-Peru-Suriname-Uruguay-Venezuela'.split('-')
+# samerica=samerica.split('-')
 
 
 if(__name__=='__main__'):
     p=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    p.add_argument('--src',default='Confirmed',help='Confirmed, Deaths, Recovered')
+    p.add_argument('--src',default='confirmed',help='Confirmed, Deaths, Recovered')
     p.add_argument('--thresh',default=50,type=int,help='min number of cases for aligning chronologically')
     p.add_argument('--locs',help='desired countries. example: China-US-Sri_Lanka',
         default='China-US-Italy-Germany')
@@ -123,6 +98,8 @@ if(__name__=='__main__'):
     # p.add_argument('--allPlots',default=False,action='store_true',help='plot all plots')
     p.add_argument('--topAbs',default=None,type=int,help='top N countries by absolute number')
     p.add_argument('--botAbs',default=None,type=int,help='bottom N countries by absolute number')
+    p.add_argument('--minus', help='excluded countries. example: Fiji-Diamond_Princess',
+                   default='China-US-Italy-Germany')
     args=p.parse_args()
 
     if(args.topAbs is not None and args.botAbs is not None):
@@ -147,8 +124,12 @@ if(__name__=='__main__'):
         args.locs=eu
     elif(args.locs=='all'):
         args.locs=names
+    elif(args.locs=='samerica'):
+        args.locs=samerica
     else:
         args.locs = args.locs.replace('_',' ').split('-')
+
+    args.minus = args.minus.replace('_',' ').split('-')
 
     print('number of available plot formats:',len(formats))
     print('number of affected countries / sovereignties:',len(names))
@@ -194,62 +175,19 @@ if(__name__=='__main__'):
         plotlist = plotlist[::-1][:args.botAbs] # already ordered in descending order, can reverse
 
 
-
-    # if(args.allPlots):
-    #     # plot everything
-    #     f,p = plt.subplots(2,2)
-    #     p=np.reshape(p,4)
-    #     f.suptitle(args.src + ' infection cases')
-    #     for j,i in enumerate(plotlist):
-    #         p[0].plot(data[i].days,data[i].vals+1,formats[j],label='{} ({:e})'.format(i,pops[i]))
-    #         # note: adding +1 for compatabilitty with log plotting
-    #     p[0].set_ylabel('Number of Cases [n]')
-    #     p[0].set_xlabel('Days since world outbreak ('+date0+') [Days]')
-    #     p[0].grid()
-    #     # p[0].set_yscale('log')
-    #
-    #     # p[1].legend(loc=2,fontsize='x-small',ncol=2)
-    #     indPlot=0
-    #     if(len(plotlist)<20):
-    #         p[indPlot].legend(loc=2)
-    #     elif(len(plotlist)>20 and len(plotlist) <50):
-    #         p[0].legend(loc=2,fontsize='x-small',ncol=2)
-    #     else:
-    #         p[0].legend(loc=2,fontsize=4,ncol=3)
-    #     for j,i in enumerate(plotlist):
-    #         p[1].plot(data[i].days,data[i].percentpop,formats[j],label='{} ({:e})'.format(i,pops[i]))
-    #     p[1].set_ylabel('Population Percentage [%]')
-    #     p[1].set_xlabel('Days since world outbreak ('+date0+') [Days]')
-    #     p[1].grid()
-    #
-    #
-    #     for j,i in enumerate(plotlist):
-    #         p[2].plot(data[i].daysAdj,data[i].valsAdj,formats[j],label='{} ({:e})'.format(i,pops[i]))
-    #     p[2].set_ylabel('Number of Cases [n]')
-    #     p[2].set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-    #     p[2].grid()
-    #
-    #     for j,i in enumerate(plotlist):
-    #         p[3].plot(data[i].daysAdj,data[i].percentpopAdj,formats[j],label='{} ({:e})'.format(i,pops[i]))
-    #     p[3].set_ylabel('Population Percentage [%]')
-    #     p[3].set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-    #     p[3].grid()
-    #     plt.show()
-    # else:
-    # palette = cm.get_cmap('plasma',len(plotlist)+2)
-    # colors = palette.colors[:-2][::-1]
-
     f,p = plt.subplots(figsize=(10,7))
     lines=[]
     for j,iloc in enumerate(plotlist):
-        lines.append( p.plot(data[iloc].daysAdj, data[iloc].per100kAdj, label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)[0] )
+        lines.append( p.plot(data[iloc].daysAdj, data[iloc].per100kAdj,
+                             formats[j],
+                             label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)[0] )
     p.set_ylabel('Cases/100,000 [Count]')
     p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
     f.suptitle('''{} Cases per 100,000 people
     Adjusted for start of outbreak (thresh:{})'''.format(args.src,args.thresh))
     p.grid()
     p.legend()
-    annot1=p.annotate("", xy=(0,0), xytext=( 40,0 ), textcoords="offset points",
+    annot1=p.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
                     bbox=dict(boxstyle="round", fc="w"),
                     arrowprops=dict(arrowstyle="->"))
     annot1.set_visible(False)
@@ -279,15 +217,19 @@ if(__name__=='__main__'):
     f2, p2 = plt.subplots(figsize=(10,7))
     for j, iloc in enumerate(plotlist):
         lines2.append( p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
-                label='{} ({:.3}m)'.format(iloc, pops[iloc] / 1e6),
-                linewidth=3)[0] )
+                formats[j],
+                label='{} ({})'.format(iloc, data[iloc].valsAdj.max()/1e3),
+                linewidth=3)[0]
+
+               )
     p2.set_ylabel('Total Cases [Count]')
     p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
     f2.suptitle('''Total {} Cases
     Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
     p2.grid()
+    p2.set_yscale('log')
     p2.legend()
-    annot2=p2.annotate("", xy=(0,0), xytext=( 40,0 ), textcoords="offset points",
+    annot2=p2.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
                     bbox=dict(boxstyle="round", fc="w"),
                     arrowprops=dict(arrowstyle="->"))
     annot2.set_visible(False)
@@ -313,6 +255,13 @@ if(__name__=='__main__'):
                 f2.canvas.draw_idle()
     f2.canvas.mpl_connect("motion_notify_event", hover2)
 
+    # for now, only plot the first (highest) entry
+    f3,p3=plt.subplots()
+    for iname in plotlist:
+        ydiff = data[iname].valsAdj[1:]-data[iname].valsAdj[:-1]
+        p3.bar(data[iname].daysAdj[:-1],ydiff,label=iname)
+    p3.legend()
+    p3.grid()
     # show plots
     plt.show()
     print('done')
