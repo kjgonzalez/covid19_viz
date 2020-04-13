@@ -87,9 +87,12 @@ _whereGreater = np.where(_res[:,1]>1)
 assert _res[:,1].max()==1,"repeated locations:\n{}".format(_res[_whereGreater])
 
 # generate all possible combinations, with priority to color & marker
+new_colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728',
+              '#9467bd', '#8c564b', '#e377c2', '#7f7f7f',
+              '#bcbd22', '#17becf']
 formats = []
 for ils in '- -- -. :'.split(' '):
-    for imk in ' , o * v x ^ s +'.split(' '):
+    for imk in ' o * v x ^ s , +'.split(' '):
         for iclr in 'bgrcmyk':
             formats.append( iclr+ils+imk )
 
@@ -113,34 +116,86 @@ class Country:
             self.vals = spl(self.days)
 
     @property
-    def _all(self):
-        return (self.name,self.days,self.vals)
-
-    @property
-    def percentpop(self):
+    def _percentpop(self):
         return self.vals/self.pop*100
 
     @property
-    def daysAdj(self):
+    def _daysAdj(self):
         # import ipdb; ipdb.set_trace()
         return self.days[self.ind_first:]-self.days[self.ind_first]
 
     @property
-    def valsAdj(self):
+    def _valsAdj(self):
         return self.vals[self.ind_first:]
     @property
-    def percentpopAdj(self):
-         return self.percentpop[self.ind_first:]
+    def _percentpopAdj(self):
+         return self._percentpop[self.ind_first:]
     @property
-    def per100k(self):
-        return self.percentpop/100*100e3
+    def _per100k(self):
+        return self._percentpop/100*100e3
     @property
-    def per100kAdj(self):
-        return self.percentpopAdj/100*100e3
+    def _per100kAdj(self):
+        return self._percentpopAdj/100*100e3
 
     @property
-    def newvals(self):
-        return self.days,self.vals
+    def D_raw(self):
+        return self.days,self.vals,self.fmtplot
+
+    @property
+    def D_dateAdjusted(self):
+        return self._daysAdj,self._valsAdj,self.fmtplot
+
+    @property
+    def D_dateAdjPer100k(self):
+        return self._daysAdj,self._per100kAdj,self.fmtplot
+
+    @property
+    def D_dateAdjNewDaily(self):
+        ydiff = entity[iloc]._valsAdj[1:] - entity[iloc]._valsAdj[:-1]
+        return entity[iloc]._daysAdj[:-1], ydiff, self.fmtplot
+
+class PlotObject:
+    ''' want to make simple object that sets up graph '''
+    def __init__(self,title='', xlabel='', ylabel='', scale='linear'):
+        self.f,self.p=plt.subplots(figsize=(10,7))
+        self.curves = []
+        self.p.set_ylabel(ylabel)
+        self.p.set_xlabel(xlabel)
+        self.f.suptitle(title)
+        self.p.grid()
+        self.p.set_yscale(scale)
+        self.f.canvas.mpl_connect("motion_notify_event", self._hover)
+
+        self.annot1=self.p.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
+                          bbox=dict(boxstyle="round", fc="w"),
+                          arrowprops=dict(arrowstyle="->"))
+        self.annot1.set_visible(False)
+
+    def add_curve(self,data,Label):
+        ''' pass curve data as (xdata,ydata,format) '''
+        self.curves.append( self.p.plot(*data, label=Label, linewidth=3)[0] )
+        self.p.legend()
+
+    def _update_annot(self,name, xmouse, ymouse):
+        self.annot1.xy = (xmouse, ymouse)
+        self.annot1.set_text(name)
+        self.annot1.get_bbox_patch().set_alpha(0.4)
+
+    def _hover(self,event):
+        vis = self.annot1.get_visible()
+        if event.inaxes == self.p:
+            _ind = -1
+            for i in range(len(self.curves)):
+                if (self.curves[i].contains(event)[0]):
+                    _ind = i
+            if (_ind > -1):
+                self._update_annot(self.curves[_ind]._label, event.xdata, event.ydata)
+                self.annot1.set_visible(True)
+                self.f.canvas.draw_idle()
+            elif (vis):
+                self.annot1.set_visible(False)
+                self.f.canvas.draw_idle()
+
 
 if(__name__=='__main__'):
     p=argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -167,10 +222,9 @@ if(__name__=='__main__'):
     days = days-days[0] # days since start of worldwide outbreak
     locs_affected = listContents(dcon[:,1],True)[:,0] # locs_affected of affected countries
     locs_affected = locs_affected[np.argsort(locs_affected)] # sort locs_affected alphabetically
-    pops = np.array(pd.read_csv(f_pop,header=None))
-    pops = { i[0]:int(i[1]) for i in pops } # overwrite as dictionary
+    pops = { i[0]:int(i[1]) for i in np.array(pd.read_csv(f_pop,header=None)) } # pop_data as dict
 
-    # load locs and minus, remove minus, remove locations not affected
+    # load locations and minus-locations, remove minus, remove locations not affected
     LOCS = parse_countries_string(args.locs,locs_affected)
     _MINUS = parse_countries_string(args.minus,locs_affected)
     LOCS = list((set(LOCS) - set(_MINUS)).intersection(set(locs_affected)))
@@ -187,26 +241,25 @@ if(__name__=='__main__'):
             f.close()
 
     # reload population data
-    pdpops = np.array(pd.read_csv(f_pop,header=None))
-    pops = { i[0]:int(i[1]) for i in pdpops }
+    pops = { i[0]:int(i[1]) for i in np.array(pd.read_csv(f_pop,header=None)) }
 
-    # put yvalues into single array
+    # combine rows where country is listed multiple times (US, china, etc)
     numbers=np.zeros((len(locs_affected),len(dcon[0,4:]))).astype(int)
     for irow in dcon:
         ind = np.where(irow[1]==locs_affected)
         numbers[ind]+=irow[4:].astype(int)
-    numbers=numbers.astype(int)
+    # numbers=numbers.astype(int) # possibly needless, commenting out
 
-    # put all data into dict of objects
-    data = dict()
+    # put entities into dictionary
+    entity = dict()
     plotlist=np.array(LOCS)
     for i,iname in enumerate(plotlist):
         ind = np.where(iname==locs_affected)[0][0]
-        data[iname]=Country(iname,days,numbers[ind],pops[iname],
-                            thresh=args.thresh,smooth=args.smooth,formatPlot=formats[i])
+        entity[iname]=Country(iname,days,numbers[ind],pops[iname],
+                            thresh=args.thresh,smooth=args.smooth)
 
     # order the list in ascending abs
-    vals = np.array([data[iname].vals.max() for iname in plotlist])
+    vals = np.array([entity[iname].vals.max() for iname in plotlist])
     mask=np.argsort(vals)
     plotlist=plotlist[mask[::-1]]
     vals=vals[mask[::-1]]
@@ -215,103 +268,41 @@ if(__name__=='__main__'):
         plotlist=plotlist[:args.topAbs]
     elif(args.botAbs!=None): plotlist = plotlist[::-1][:args.botAbs]
 
-
-
-
-
+    # at this point, assign format colors
+    for i,iloc in enumerate(plotlist):
+        entity[iloc].fmtplot = formats[i]
+        print('{}: {}'.format( iloc,entity[iloc].fmtplot ))
 
     # plot everything
     print('number of affected countries / sovereignties:',len(locs_affected))
     print('plotting {} countries...'.format(len(plotlist)))
 
 
-
-    f,p = plt.subplots(figsize=(10,7))
-    lines=[]
+    po1=PlotObject('Total {} Cases'.format(args.src),
+                   'Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh),
+                   'Total Cases [Count]')
     for j,iloc in enumerate(plotlist):
-        lines.append( p.plot(data[iloc].daysAdj, data[iloc].per100kAdj, data[iloc].fmtplot,
-                             label='{} ({:.3}m)'.format(iloc, pops[iloc]/1e6),linewidth=3)[0] )
-    p.set_ylabel('Cases/100,000 [Count]')
-    p.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-    f.suptitle('''{} Cases per 100,000 people
-    Adjusted for start of outbreak (thresh:{})'''.format(args.src,args.thresh))
-    p.grid()
-    p.legend()
-    annot1=p.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
-                      bbox=dict(boxstyle="round", fc="w"),
-                      arrowprops=dict(arrowstyle="->"))
-    annot1.set_visible(False)
+        po1.add_curve(entity[iloc].D_dateAdjusted,
+                      '{}({})'.format(iloc,entity[iloc].vals.max()))
 
-    def update_annot(name, xmouse, ymouse):
-        annot1.xy = (xmouse, ymouse)
-        annot1.set_text(name)
-        annot1.get_bbox_patch().set_alpha(0.4)
 
-    def hover(event):
-        vis = annot1.get_visible()
-        if event.inaxes == p:
-            _ind = -1
-            for i in range(len(lines)):
-                if (lines[i].contains(event)[0]):
-                    _ind = i
-            if (_ind > -1):
-                update_annot(lines[_ind]._label, event.xdata, event.ydata)
-                annot1.set_visible(True)
-                f.canvas.draw_idle()
-            elif (vis):
-                annot1.set_visible(False)
-                f.canvas.draw_idle()
-    f.canvas.mpl_connect("motion_notify_event", hover)
+    po2=PlotObject('Total {} Cases'.format(args.src),
+                   'Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh),
+                   'Total Cases [Count]')
+    for j,iloc in enumerate(plotlist):
+        po2.add_curve(entity[iloc].D_dateAdjNewDaily,
+                      '{}({})'.format(iloc,entity[iloc].vals.max()))
 
-    # lines2=[]
-    # f2, p2 = plt.subplots(figsize=(10,7))
-    # for j, iloc in enumerate(plotlist):
-    #     lines2.append( p2.plot(data[iloc].daysAdj, data[iloc].valsAdj,
-    #             formats[j],
-    #             label='{} ({})'.format(iloc, data[iloc].valsAdj.max()/1e3),
-    #             linewidth=3)[0]
-    #
-    #            )
-    # p2.set_ylabel('Total Cases [Count]')
-    # p2.set_xlabel('Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh))
-    # f2.suptitle('''Total {} Cases
-    # Adjusted for start of outbreak (thresh:{})'''.format(args.src, args.thresh))
-    # p2.grid()
-    # p2.set_yscale('log')
-    # p2.legend()
-    # annot2=p2.annotate("", xy=(0,0), xytext=( 40,-20 ), textcoords="offset points",
-    #                 bbox=dict(boxstyle="round", fc="w"),
-    #                 arrowprops=dict(arrowstyle="->"))
-    # annot2.set_visible(False)
-    #
-    # def update_annot2(name, xmouse, ymouse):
-    #     annot2.xy = (xmouse, ymouse)
-    #     annot2.set_text(name)
-    #     annot2.get_bbox_patch().set_alpha(0.4)
-    #
-    # def hover2(event):
-    #     vis = annot2.get_visible()
-    #     if event.inaxes == p2:
-    #         _ind = -1
-    #         for i in range(len(lines2)):
-    #             if (lines2[i].contains(event)[0]):
-    #                 _ind = i
-    #         if (_ind > -1):
-    #             update_annot2(lines2[_ind]._label, event.xdata, event.ydata)
-    #             annot2.set_visible(True)
-    #             f2.canvas.draw_idle()
-    #         elif (vis):
-    #             annot2.set_visible(False)
-    #             f2.canvas.draw_idle()
-    # f2.canvas.mpl_connect("motion_notify_event", hover2)
-    #
-    # # for now, only plot the first (highest) entry
+
+
     # f3,p3=plt.subplots()
-    # for iname in plotlist:
-    #     ydiff = data[iname].valsAdj[1:]-data[iname].valsAdj[:-1]
-    #     p3.bar(data[iname].daysAdj[:-1],ydiff,label=iname)
+    # wide=1.0
+    # width = wide/3
+    # for i,iname in enumerate(plotlist):
+    #     ydiff = entity[iname]._valsAdj[1:]-entity[iname]._valsAdj[:-1]
+    #     p3.bar(entity[iname]._daysAdj[:-1]+wide/len(plotlist)*(i),ydiff,width,label=iname)
     # p3.legend()
     # p3.grid()
-    # # show plots
+    # show plots
     plt.show()
     print('done')
