@@ -278,7 +278,7 @@ if(__name__=='__main__'):
     print('plotting {} countries...'.format(len(plotlist)))
 
 
-    po1=PlotObject('Total {} Cases'.format(args.src),
+    po1=PlotObject('Total {} cases'.format(args.src),
                    'Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh),
                    'Total Cases [Count]')
     for j,iloc in enumerate(plotlist):
@@ -286,23 +286,14 @@ if(__name__=='__main__'):
                       '{}({})'.format(iloc,entity[iloc].vals.max()))
 
 
-    po2=PlotObject('Total {} Cases'.format(args.src),
+    po2=PlotObject('Daily new {} cases'.format(args.src),
                    'Days since per-country outbreak, adjusted [Days] (thresh:{})'.format(args.thresh),
-                   'Total Cases [Count]')
+                   'Daily new {} cases [Count]'.format(args.src))
     for j,iloc in enumerate(plotlist):
         po2.add_curve(entity[iloc].D_dateAdjNewDaily,
                       '{}({})'.format(iloc,entity[iloc].vals.max()))
 
 
-
-    # f3,p3=plt.subplots()
-    # wide=1.0
-    # width = wide/3
-    # for i,iname in enumerate(plotlist):
-    #     ydiff = entity[iname]._valsAdj[1:]-entity[iname]._valsAdj[:-1]
-    #     p3.bar(entity[iname]._daysAdj[:-1]+wide/len(plotlist)*(i),ydiff,width,label=iname)
-    # p3.legend()
-    # p3.grid()
     # show plots
     plt.show()
     print('done')
